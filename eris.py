@@ -128,6 +128,9 @@ if __name__ == "__main__":
     parser.add_argument('-index_algorithm', metavar='<index_algorithm>',
                         help='If reference is <2Gb use is, if >2Gb use bwtsw',
                         default='is')
+    parser.add_argument('-glm', dest='glm', help='Override nlmean with 4.6*mean genome length / mean fragment length.',
+                        action='store_true')
+    parser.set_defaults(glm=False)
 
 
 
@@ -159,6 +162,7 @@ if __name__ == "__main__":
     overwrite = bool(args.overwrite)
     bwaindex = bool(args.bwaindex)
     index_algorithm = args.index_algorithm
+    glm = bool(args.glm)
 
     os.chdir(wd)
     cwd = os.getcwd()
@@ -259,9 +263,6 @@ if __name__ == "__main__":
 
 
     meanglength = np.mean(glengths)
-    print "mean genome length: " + str(meanglength)
-
-    exit()
 
     # for infilename in infilelist:
     #     filename = os.path.basename(infilename)
@@ -296,6 +297,9 @@ if __name__ == "__main__":
 
         chk_mkdir(newdir)
 
+        if glm:
+            nlmu = int(4.6 * meanglength / slen) #Lander-waterman 99% coverage
+            nlsigma = 0.0
 
         onames = []
         for ofile in range(nfiles):
