@@ -20,6 +20,7 @@ import numpy as np
 import fnmatch
 
 def bash_command(cmd):
+    # print cmd
     cmdfile.write(cmd)
     cmdfile.write("\n\n")
     subp = subprocess.Popen(['/bin/bash', '-c', cmd], stdout=PIPE, stderr=PIPE)
@@ -31,6 +32,147 @@ def bash_command(cmd):
         print stderr
     logfile.write(stderr)
     return stdout
+
+
+def nomosnew(statsfile, subdir):
+    sizedirs = next(os.walk(wd))[1]
+    for sizedir in sizedirs:
+        print "\nSize : " + sizedir
+
+        fragsize = sizedir
+        if fragsize.endswith('bp'):
+            fragsize = fragsize[:-2]
+
+        cursizedir = os.getcwd()
+
+        os.chdir(cursizedir + "/" + sizedir)
+
+        origfiles = []
+
+        curdir = os.getcwd()
+        rawfiles = os.listdir(curdir)
+        for rawfile in rawfiles:
+            if rawfile.endswith(".fasta"):
+                origfiles.append(rawfile)
+            elif rawfile.endswith(".fasta.gz"):
+                fastaname = os.path.splitext(rawfile)[0]
+                with gzip.open(rawfile, 'rb') as f_in, open(fastaname, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                flist.append(fastaname)
+
+        refdirs = next(os.walk(curdir))[1]
+
+        for refdir in refdirs:
+            print "\nReference: " + refdir
+            countfile = open(refdir + "/" + refdir + "counts.csv", 'w')
+            countfile.write("Orig file, Orig Count, Ref File, Ref Count, Correctly Mapped Count\n")
+            origcounts = []
+            outgcounts = []
+            refmatchcounts = []
+            origmeanlengths = []
+            outgmeanlengths = []
+
+            print "Counting..."
+            bar = progressbar.ProgressBar()
+            for i in bar(range(len(origfiles))):
+                origfile = origfiles[i]
+                origbase, origext = os.path.splitext(origfile)
+
+                outgfile = refdir + "/" + origbase + "-" + refdir + ".aln.fasta"
+
+                if os.path.isfile(outgfile):
+                    origout = bash_command("wc -l " + origfile)
+                    origcols = origout.split()
+                    origcount = int(origcols[0]) / 2
+
+                    origcounts.append(origcount)
+                    origlengths = []
+                    orgfile = open(outgfile, 'r')
+                    for orgline in orgfile:
+                        orgline = orgline.strip()
+                        if orgline.startswith(">"):
+                            pass
+                        else:
+                            origlengths.append(len(orgline))
+
+
+                    outgout = bash_command("wc -l " + outgfile)
+                    outgcols = outgout.split()
+                    outgcount = int(outgcols[0]) / 2
+
+
+                    outgcounts.append(outgcount)
+
+                    refmatches = 0
+                    oglengths = []
+                    ogfile = open(outgfile, 'r')
+                    for outgline in ogfile:
+                        ogline = outgline.strip()
+                        if ogline.startswith(">"):
+                            if ogline[1:] == refdir:
+                                refmatches = refmatches + 1
+                        else:
+                            oglengths.append(len(outgline))
+
+                    refmatchcounts.append(refmatches)
+
+
+                    countfile.write(origfile)
+                    countfile.write(",")
+                    countfile.write(str(origcount))
+                    countfile.write(",")
+                    countfile.write(outgfile)
+                    countfile.write(",")
+                    countfile.write(str(outgcount))
+                    countfile.write(",")
+                    countfile.write(str(refmatches))
+                    countfile.write("\n")
+                    origmeanlengths.append(np.mean(origlengths))
+                    outgmeanlengths.append(np.mean(oglengths))
+            countfile.close()
+
+            statsfile.write(subdir)
+            statsfile.write(",")
+            statsfile.write(fragsize)
+            statsfile.write(",")
+            statsfile.write(refdir)
+            statsfile.write(",")
+            statsfile.write(str(np.mean(origcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.std(origcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(origmeanlengths)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(outgcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.std(outgcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(outgmeanlengths)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(refmatchcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.std(refmatchcounts)))
+            statsfile.write("\n")
+
+
+        if kraken:
+            print "RELEASE THE KRAKEN!!!!"
+            bar = progressbar.ProgressBar()
+            for i in bar(range(len(origfiles))):
+                origfile = origfiles[i]
+
+                bash_command(
+                    "kraken --threads " + threads + " --db " + krakendb + " " + origfile + " > " + origfile + ".kraken")
+
+                bash_command("kraken-translate --db " + krakendb + " " + origfile + ".kraken > " + origfile + ".labels")
+
+                bash_command(
+                    "kraken-translate --db " + krakendb + " " + origfile + ".kraken| cut -f2 | python /data/scripts/make_counts.py > " + origfile + ".kraken4krona")
+
+                bash_command("ktImportText " + origfile + ".kraken4krona -o " + origfile + ".kraken.krona.html")
+
+        os.chdir("..")
+    os.chdir("..")
 
 
 if __name__ == "__main__":
@@ -55,14 +197,20 @@ if __name__ == "__main__":
     parser.add_argument('-verbose', dest='verbose', help='Print stdout and stderr to console.',
                         action='store_true')
     parser.set_defaults(verbose=False)
-    parser.add_argument('-outg', metavar='<outg>', help='Name of genome.',
-                        default='')
     parser.add_argument('-dam', dest='dam', help='Search for files with the .dam. extension. Otherwise search for .wodam.',
                         action='store_true')
     parser.set_defaults(dam=False)
     parser.add_argument('-oldstyle', dest='oldstyle', help='Eris was run under old style',
                         action='store_true')
     parser.set_defaults(oldstyle=False)
+
+    parser.add_argument('-kraken', dest='kraken', help='Run Kraken',
+                        action='store_true')
+    parser.set_defaults(kraken=False)
+    parser.add_argument('-multisub', dest='multisub', help='True if multiple sub directories, each their ther own subdirs for the fragment sizes (i.e. 20bp, 40bp...)',
+                        action='store_true')
+    parser.set_defaults(multisub=False)
+
 
 
 
@@ -74,9 +222,10 @@ if __name__ == "__main__":
     scriptsdir = args.scriptsdir
     threads = args.threads
     verbose = bool(args.verbose)
-    outg = args.outg
     dam = args.dam
     oldstyle = bool(args.oldstyle)
+    kraken = bool(args.kraken)
+    multisub = bool(args.multisub)
 
     cmdfile = open("nomos_cmds", 'w')
 
@@ -235,34 +384,34 @@ if __name__ == "__main__":
 
 
 
+                if kraken:
+                    print "RELEASE THE KRAKEN!!!!"
+                    bar = progressbar.ProgressBar()
+                    for i in bar(range(len(flist))):
+                        ffile = flist[i]
 
-                print "RELEASE THE KRAKEN!!!!"
-                bar = progressbar.ProgressBar()
-                for i in bar(range(len(flist))):
-                    ffile = flist[i]
+                        bash_command(
+                            "kraken --threads " + threads + " --db " + krakendb + " " + ffile + " > " + ffile + ".kraken")
 
-                    bash_command(
-                        "kraken --threads " + threads + " --db " + krakendb + " " + ffile + " > " + ffile + ".kraken")
+                        bash_command("kraken-translate --db " + krakendb + " " + ffile + ".kraken > " + ffile + ".labels")
 
-                    bash_command("kraken-translate --db " + krakendb + " " + ffile + ".kraken > " + ffile + ".labels")
+                        bash_command(
+                            "kraken-translate --db " + krakendb + " " + ffile + ".kraken| cut -f2 | python /data/scripts/make_counts.py > " + ffile + ".kraken4krona")
 
-                    bash_command(
-                        "kraken-translate --db " + krakendb + " " + ffile + ".kraken| cut -f2 | python /data/scripts/make_counts.py > " + ffile + ".kraken4krona")
-
-                    bash_command("ktImportText " + ffile + ".kraken4krona -o " + ffile + ".kraken.krona.html")
+                        bash_command("ktImportText " + ffile + ".kraken4krona -o " + ffile + ".kraken.krona.html")
 
 
-
-                print "\nCompressing..."
-                bar = progressbar.ProgressBar()
-                for i in bar(range(len(flist))):
-                    ftrz = flist[i]
-                    if os.path.isfile(ftrz) and os.path.isfile(ftrz + ".gz"):
-                        os.remove(ftrz + ".gz")
-                    if os.path.isfile(ftrz):
-                        with open(ftrz, 'rb') as f_in, gzip.open(ftrz + ".gz", 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                        os.remove(ftrz)
+                #
+                # print "\nCompressing..."
+                # bar = progressbar.ProgressBar()
+                # for i in bar(range(len(flist))):
+                #     ftrz = flist[i]
+                #     if os.path.isfile(ftrz) and os.path.isfile(ftrz + ".gz"):
+                #         os.remove(ftrz + ".gz")
+                #     if os.path.isfile(ftrz):
+                #         with open(ftrz, 'rb') as f_in, gzip.open(ftrz + ".gz", 'wb') as f_out:
+                #             shutil.copyfileobj(f_in, f_out)
+                #         os.remove(ftrz)
 
 
 
@@ -274,101 +423,34 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
-
     ###new style
     else:
-        subdirs = next(os.walk(wd))[1]
-
-        for subdir in subdirs:
-            print "Now working in " + subdir
-            os.chdir(wd + "/" + subdir)
 
 
-            origfiles = []
+        statsfile = open(os.path.dirname(wd) + "nomos-stats.csv", 'w')
+        statsfile.write("SubDir, Frag. Length, Ref,  Randomized Mean. Reads ,Randomized StD. Reads, Randomized Mean Frag. Length, Mapped Mean Reads, Mapped StD Reads, Mapped Mean Frag. Length, Correctly Mapped Mean Reads, Correctly Mapped StD Reads\n")
 
-            curdir = os.getcwd()
-            rawfiles = os.listdir(curdir)
-            for rawfile in rawfiles:
-                if rawfile.endswith(".fasta"):
-                    origfiles.append(rawfile)
-                elif rawfile.endswith(".fasta.gz"):
-                    fastaname = os.path.splitext(rawfile)[0]
-                    with gzip.open(rawfile, 'rb') as f_in, open(fastaname, 'wb') as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                    flist.append(fastaname)
+        if multisub:
+            subdirs = next(os.walk(wd))[1]
+            for subdir in subdirs:
+                print "\n*******\nNow working in subdirectory " + subdir
+                os.chdir(wd + "/" + subdir)
 
+                nomosnew(statsfile, subdir)
 
-            statsfile = open(subdir+"-stats.csv", 'w')
-            statsfile.write("Ref,Orig. Mean.,Orig. StD., Ref Mean, Ref StD\n")
-
-            refdirs = next(os.walk(curdir))[1]
-
-            for refdir in refdirs:
-                countfile = open(refdir+"/"+refdir+"counts.csv", 'w')
-                countfile.write("Orig file, Orig Count, Ref File, Ref Count\n")
-                origcounts = []
-                outgcounts = []
-                for origfile in origfiles:
-                    origbase, origext = os.path.splitext(origfile)
-
-                    outgfile = refdir + "/" + origbase + "-" + refdir + ".aln.fasta"
-                    if os.path.isfile(outgfile):
-                        origout = bash_command("wc -l " + origfile)
-                        origcols = origout.split()
-                        origcount = int(origcols[0]) / 2
-
-                        outgout = bash_command("wc -l " + outgfile)
-                        outgcols = outgout.split()
-                        outgcount = int(outgcols[0]) / 2
-
-                        origcounts.append(origcount)
-                        outgcounts.append(outgcount)
-
-                        countfile.write(origfile)
-                        countfile.write(",")
-                        countfile.write(str(origcount))
-                        countfile.write(",")
-                        countfile.write(outgfile)
-                        countfile.write(",")
-                        countfile.write(str(outgcount))
-                        countfile.write("\n")
-                countfile.close()
-
-                statsfile.write(refdir)
-                statsfile.write(",")
-                statsfile.write(str(np.mean(origcounts)))
-                statsfile.write(",")
-                statsfile.write(str(np.std(origcounts)))
-                statsfile.write(",")
-                statsfile.write(str(np.mean(outgcounts)))
-                statsfile.write(",")
-                statsfile.write(str(np.std(outgcounts)))
-                statsfile.write("\n")
-
-            statsfile.close()
-
-            print "RELEASE THE KRAKEN!!!!"
-            bar = progressbar.ProgressBar()
-            for i in bar(range(len(origfiles))):
-                origfile = origfiles[i]
-
-                bash_command("kraken --threads " + threads + " --db " + krakendb + " " + origfile + " > " + origfile + ".kraken")
-
-                bash_command("kraken-translate --db " + krakendb + " " + origfile + ".kraken > " + origfile + ".labels")
-
-                bash_command("kraken-translate --db " + krakendb + " " + origfile + ".kraken| cut -f2 | python /data/scripts/make_counts.py > " + origfile + ".kraken4krona")
-
-                bash_command("ktImportText " + origfile + ".kraken4krona -o " + origfile + ".kraken.krona.html")
+        else:
+            nomosnew(statsfile, "N/A")
 
 
-            os.chdir("..")
+
+        statsfile.close()
+
+
+
+
+
+
+
 
 
 

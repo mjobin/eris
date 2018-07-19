@@ -183,8 +183,7 @@ if __name__ == "__main__":
 
     logfile.write("\n****************\nERIS\n****************\n")
     logfile.write("Run started: " + str(today) + "\n")
-    logfile.write("Mean numbers of lines in any one FASTA file: " + str(nlmu)+"\n")
-    logfile.write("Variance in numbers of lines in any one FASTA file: " + str(nlsigma)+"\n")
+
     logfile.write("aDNA damage: ")
     if adnadmg:
         logfile.write("ON\n")
@@ -264,6 +263,13 @@ if __name__ == "__main__":
 
     meanglength = np.mean(glengths)
 
+    if glm:
+        logfile.write("Mean numbers of lines in any one FASTA file: " + str(4.6 * meanglength) +" / mean length of fragment\n")
+        logfile.write("Variance in numbers of lines in any one FASTA file: 0.0 \n")
+    else:
+        logfile.write("Mean numbers of lines in any one FASTA file: " + str(nlmu)+"\n")
+        logfile.write("Variance in numbers of lines in any one FASTA file: " + str(nlsigma)+"\n")
+
     # for infilename in infilelist:
     #     filename = os.path.basename(infilename)
     #     filebase, fileext = os.path.splitext(filename)
@@ -291,7 +297,7 @@ if __name__ == "__main__":
         slen = sub
         newdir = str(sub) + "bp"
         if sub < 1: #normal
-            newdir = "mu-"+str(nmu)+"-sig-"+str(nsigma)
+            newdir = str(nmu) + "-mu-"+str(nsigma)+"-sig-"
             slen = np.random.normal(nmu, nsigma)
         print "\nRandomizing files in: " + newdir
 
