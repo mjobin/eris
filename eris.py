@@ -339,6 +339,7 @@ if __name__ == "__main__":
                 # And now apply damage
                 slist = list(sample)
                 if adnadmg:
+
                     for j in range(len(slist)):
                         z = -1
                         if slist[j] == 'G':  # distance from 3' end
@@ -348,7 +349,6 @@ if __name__ == "__main__":
                         if z >= 0:
                             dz = (pow((1 - pmdp), (z - 1)) * pmdp) + pmdc
                             rando = rng.random()
-
                             if rando < dz:
                                 if slist[j] == 'G':
                                     slist[j] = 'A'
@@ -360,7 +360,7 @@ if __name__ == "__main__":
                 outfile.write(">")
                 outfile.write(oname)
                 outfile.write("\n")
-                outfile.write(sample)
+                outfile.write(newsample)
                 outfile.write("\n")
             outfile.close()
 
