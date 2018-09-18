@@ -65,70 +65,90 @@ def nomosnew(statsfile, subdir):
         for refdir in refdirs:
             print "\nReference: " + refdir
             countfile = open(refdir + "/" + refdir + "counts.csv", 'w')
-            countfile.write("Orig file, Orig Count, Ref File, Ref Count, Correctly Mapped Count\n")
+            countfile.write("Orig file, Orig Count,  Ref File, Ref Count, Correctly Mapped Count\n")
             origcounts = []
+            origmatches = []
             outgcounts = []
             refmatchcounts = []
+
             origmeanlengths = []
+            origmeanmatchlengths = []
             outgmeanlengths = []
+            corrmeanlengths = []
+            incorrmeanlengths = []
+
 
             print "Counting..."
             bar = progressbar.ProgressBar()
             for i in bar(range(len(origfiles))):
-                origfile = origfiles[i]
-                origbase, origext = os.path.splitext(origfile)
+            # for i in range(len(origfiles)):
+                origfilename = origfiles[i]
+                origbase, origext = os.path.splitext(origfilename)
 
-                outgfile = refdir + "/" + origbase + "-" + refdir + ".aln.fasta"
+                outgfilename = refdir + "/" + origbase + "-" + refdir + ".aln.fasta"
 
-                if os.path.isfile(outgfile):
-                    origout = bash_command("wc -l " + origfile)
-                    origcols = origout.split()
-                    origcount = int(origcols[0]) / 2
+                if os.path.isfile(outgfilename):
+                    origlengths = []
+                    origmatchlengths = []
+                    corrlengths = []
+                    incorrlengths = []
+                    origrefmatchcount = 0
+
+                    # oldorigout = bash_command("wc -l " + origfilename)
+                    # oldorigcols = oldorigout.split()
+                    # oldorigcount = int(oldorigcols[0]) / 2
+
+                    origcount = 0
+                    origfile = open(origfilename, 'r')
+                    for origline in origfile:
+                        origline = origline.strip()
+                        if origline.startswith(">"):
+                            origcount = origcount + 1
+                            seqline = origfile.next()
+                            origlengths.append(len(seqline))
+                            if origline[1:] == refdir:
+                                origrefmatchcount = origrefmatchcount + 1
+                                origmatchlengths.append(len(seqline))
 
                     origcounts.append(origcount)
-                    origlengths = []
-                    orgfile = open(outgfile, 'r')
-                    for orgline in orgfile:
-                        orgline = orgline.strip()
-                        if orgline.startswith(">"):
-                            pass
-                        else:
-                            origlengths.append(len(orgline))
+                    # print str(oldorigcount) + "vs" + str(origcount)
+                    origmatches.append(origrefmatchcount)
 
 
-                    outgout = bash_command("wc -l " + outgfile)
-                    outgcols = outgout.split()
-                    outgcount = int(outgcols[0]) / 2
-
-
-                    outgcounts.append(outgcount)
-
+                    outgcount = 0
                     refmatches = 0
                     oglengths = []
-                    ogfile = open(outgfile, 'r')
-                    for outgline in ogfile:
+                    outgfile = open(outgfilename, 'r')
+                    for outgline in outgfile:
                         ogline = outgline.strip()
                         if ogline.startswith(">"):
+                            outgcount = outgcount + 1
+                            seqline = outgfile.next()
+                            oglengths.append(len(seqline))
                             if ogline[1:] == refdir:
                                 refmatches = refmatches + 1
-                        else:
-                            oglengths.append(len(outgline))
-
+                                corrlengths.append(len(seqline))
+                            else:
+                                incorrlengths.append(len(seqline))
+                    outgcounts.append(outgcount)
                     refmatchcounts.append(refmatches)
 
 
-                    countfile.write(origfile)
+                    countfile.write(origfilename)
                     countfile.write(",")
                     countfile.write(str(origcount))
                     countfile.write(",")
-                    countfile.write(outgfile)
+                    countfile.write(outgfilename)
                     countfile.write(",")
                     countfile.write(str(outgcount))
                     countfile.write(",")
                     countfile.write(str(refmatches))
                     countfile.write("\n")
                     origmeanlengths.append(np.mean(origlengths))
+                    origmeanmatchlengths.append(np.mean(origmatchlengths))
                     outgmeanlengths.append(np.mean(oglengths))
+                    corrmeanlengths.append(np.mean(corrlengths))
+                    incorrmeanlengths.append(np.mean(incorrlengths))
             countfile.close()
 
             statsfile.write(subdir)
@@ -143,6 +163,12 @@ def nomosnew(statsfile, subdir):
             statsfile.write(",")
             statsfile.write(str(np.mean(origmeanlengths)))
             statsfile.write(",")
+            statsfile.write(str(np.mean(origmatches)))
+            statsfile.write(",")
+            statsfile.write(str(np.std(origmatches)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(origmeanmatchlengths)))
+            statsfile.write(",")
             statsfile.write(str(np.mean(outgcounts)))
             statsfile.write(",")
             statsfile.write(str(np.std(outgcounts)))
@@ -152,6 +178,10 @@ def nomosnew(statsfile, subdir):
             statsfile.write(str(np.mean(refmatchcounts)))
             statsfile.write(",")
             statsfile.write(str(np.std(refmatchcounts)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(corrmeanlengths)))
+            statsfile.write(",")
+            statsfile.write(str(np.mean(incorrmeanlengths)))
             statsfile.write("\n")
 
 
@@ -428,7 +458,7 @@ if __name__ == "__main__":
 
 
         statsfile = open(os.path.dirname(wd) + "nomos-stats.csv", 'w')
-        statsfile.write("SubDir, Frag. Length, Ref,  Randomized Mean. Reads ,Randomized StD. Reads, Randomized Mean Frag. Length, Mapped Mean Reads, Mapped StD Reads, Mapped Mean Frag. Length, Correctly Mapped Mean Reads, Correctly Mapped StD Reads\n")
+        statsfile.write("SubDir, Frag. Length, Ref,Orig Mean Reads per File, Orig StD. Reads, Orig Mean Frag. Length, Orig. Mean Reads Matching Ref. per File,Orig. StD Reads Matching Ref. per File, Orig Mean Matching Ref. Frag. Length, Mapped Mean Reads, Mapped StD Reads, Mapped Mean Frag. Length, Correctly Mapped Mean Reads, Correctly Mapped StD Reads, Correctly Mapped Mean Frag. Length, Incorrectly Mapped Mean Frag. Length\n")
 
         if multisub:
             subdirs = next(os.walk(wd))[1]
