@@ -201,6 +201,22 @@ def nomosnew(statsfile, subdir):
 
                 bash_command("ktImportText " + origfile + ".kraken4krona -o " + origfile + ".kraken.krona.html")
 
+        if diamond:
+            print "\nDIAMOND metagenome analysis, mapping fasta reads to NR NCBI database..."
+
+
+            bar = progressbar.ProgressBar()
+            for i in bar(range(len(origfiles))):
+                origfile = origfiles[i]
+
+                bash_command("diamond blastx -p " + threads + " -t " + diamondtmp + " -b " + diamondblock + " -q " + origfile + " -d " + blastdir + "/nr.dmnd -o " + origfile + ".dmnd.matches.txt")
+
+                # 	### turn diamond results into rma files viewable in MEGAN
+                bash_command(megandir + "/tools/blast2rma -i " + origfile + ".dmnd.matches.txt -f BlastTab -r " + origfile + " -o " + origfile + ".dmnd.matches.rma -g2t " + blastdir + "/gi2tax-July2016.bin")
+
+                # 	### turn diamond output into Krona html file for visualization
+                bash_command("ktImportBLAST " + origfile + ".dmnd.matches.txt -o " + origfile + ".dmnd.krona.html")
+
         os.chdir("..")
     os.chdir("..")
 
@@ -240,6 +256,15 @@ if __name__ == "__main__":
     parser.add_argument('-multisub', dest='multisub', help='True if multiple sub directories, each their ther own subdirs for the fragment sizes (i.e. 20bp, 40bp...)',
                         action='store_true')
     parser.set_defaults(multisub=False)
+    parser.add_argument('-diamond', dest='diamond', help='Run Diamond',
+                        action='store_true')
+    parser.set_defaults(diamond=False)
+    parser.add_argument('-diamondblock', metavar='<diamondblock>', help="Diamond block size",
+                        default='48.0')
+    parser.add_argument('-diamondtmp', metavar='<diamondtmp>', help="Temp directory for Diamond",
+                        default='/dev/shm')
+    parser.add_argument('-megandir', metavar='<megandir>', help='MEGAN6 directory',
+                        default='/opt/megan')
 
 
 
@@ -255,6 +280,10 @@ if __name__ == "__main__":
     dam = args.dam
     oldstyle = bool(args.oldstyle)
     kraken = bool(args.kraken)
+    diamond = bool(args.diamond)
+    diamondblock = args.diamondblock
+    diamondtmp = args.diamondtmp
+    megandir = args.megandir
     multisub = bool(args.multisub)
 
     cmdfile = open("nomos_cmds", 'w')
