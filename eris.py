@@ -184,6 +184,9 @@ if __name__ == "__main__":
     logfile.write("\n****************\nERIS\n****************\n")
     logfile.write("Run started: " + str(today) + "\n")
 
+    logfile.write("Number of arguments:" + len(sys.argv) + "arguments.")
+    logfile.write("Argument List:", str(sys.argv))
+
     logfile.write("aDNA damage: ")
     if adnadmg:
         logfile.write("ON\n")
